@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  rifa-app:
+    build: .
+    container_name: streamlit_rifa
+    ports:
+      - "8599:8599"
+    volumes:
+      # Mapeia a pasta local "data" para a pasta "data" dentro do container
+      - ./data:/app/data
+    restart: always
