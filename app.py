@@ -1,10 +1,13 @@
-
 import streamlit as st
 import pandas as pd
 import os
 
 # --- CONFIG ---
-st.set_page_config(page_title="Rifa Digital 🍀", page_icon="🎟️", layout="centered")
+st.set_page_config(page_title="🍀 Rifa Digital da Cecília 🍀", page_icon="🎟️", layout="centered")
+
+# Cria a pasta data se não existir para evitar erros de escrita
+if not os.path.exists("data"):
+    os.makedirs("data")
 
 DB_FILE = "data/rifa_dados.csv"
 
@@ -23,7 +26,7 @@ def salvar_venda(nome, telefone, numero):
     else:
         novo_dado.to_csv(DB_FILE, mode='a', header=False, index=False)
 
-# --- ESTADO ---
+# --- ESTADO INICIAL ---
 if "step" not in st.session_state:
     st.session_state.step = 1
 
@@ -31,13 +34,15 @@ if "numero" not in st.session_state:
     st.session_state.numero = None
 
 if "dados" not in st.session_state:
-    st.session_state.dados = {}
+    st.session_state.dados = {"nome": "", "telefone": ""}
+
+if "dados_travados" not in st.session_state:
+    st.session_state.dados_travados = False
 
 # --- HEADER ---
-st.title("🍀 Rifa Digital")
+st.title("🍀 Rifa Digital da Cecília 🍀")
 st.caption("Escolha seu número e participe!")
 
-# Barra de progresso
 progresso = st.session_state.step / 4
 st.progress(progresso)
 
@@ -47,15 +52,23 @@ st.progress(progresso)
 if st.session_state.step == 1:
     st.subheader("👤 1. Seus dados")
 
-    nome = st.text_input("Nome completo")
-    telefone = st.text_input("WhatsApp")
+    # Os campos abaixo agora mantêm o valor da última compra com sucesso
+    nome = st.text_input(
+        "Nome completo",
+        value=st.session_state.dados.get("nome", ""),
+        disabled=st.session_state.dados_travados
+    )
+
+    telefone = st.text_input(
+        "WhatsApp",
+        value=st.session_state.dados.get("telefone", ""),
+        disabled=st.session_state.dados_travados
+    )
 
     if st.button("Continuar ➡️", use_container_width=True):
         if nome and telefone:
-            st.session_state.dados = {
-                "nome": nome,
-                "telefone": telefone
-            }
+            st.session_state.dados = {"nome": nome, "telefone": telefone}
+            st.session_state.dados_travados = True
             st.session_state.step = 2
             st.rerun()
         else:
@@ -66,9 +79,12 @@ if st.session_state.step == 1:
 # =========================
 elif st.session_state.step == 2:
     st.subheader("🎯 2. Escolha seu número")
+    
+    nome = st.session_state.dados.get("nome")
+    telefone = st.session_state.dados.get("telefone")
+    st.info(f"👤 {nome} | 📱 {telefone}")
 
     numeros_ocupados = carregar_ocupados()
-
     cols = st.columns(5)
 
     for i in range(1, 26):
@@ -82,15 +98,12 @@ elif st.session_state.step == 2:
                     st.session_state.numero = i
 
     if st.session_state.numero:
-        st.success(f"Você escolheu o número **{st.session_state.numero}**")
-
+        st.success(f"Selecionado: **{st.session_state.numero}**")
         col1, col2 = st.columns(2)
-
         with col1:
             if st.button("⬅️ Voltar", use_container_width=True):
                 st.session_state.step = 1
                 st.rerun()
-
         with col2:
             if st.button("Continuar ➡️", use_container_width=True):
                 st.session_state.step = 3
@@ -101,26 +114,14 @@ elif st.session_state.step == 2:
 # =========================
 elif st.session_state.step == 3:
     st.subheader("💸 3. Pagamento")
-
-    nome = st.session_state.dados["nome"]
-    numero = st.session_state.numero
-
-    st.info(f"👤 {nome} | 🎟️ Número: {numero}")
-
-    st.markdown("### PIX para pagamento")
-
-    chave_pix = "00020101021126330014br.gov.bcb.pix0111suachaveaqui"
-    st.code(chave_pix)
-
-    st.caption("Após o pagamento, confirme abaixo.")
+    st.info(f"🎟️ Número: {st.session_state.numero}")
+    st.code("d3c59165-6dc8-4a07-b487-18d1a1f1cac5")
 
     col1, col2 = st.columns(2)
-
     with col1:
         if st.button("⬅️ Voltar", use_container_width=True):
             st.session_state.step = 2
             st.rerun()
-
     with col2:
         if st.button("✅ Já paguei", use_container_width=True):
             salvar_venda(
@@ -136,19 +137,11 @@ elif st.session_state.step == 3:
 # =========================
 elif st.session_state.step == 4:
     st.balloons()
-    st.success("🎉 Reserva confirmada!")
+    st.success(f"🎉 Reserva confirmada para {st.session_state.dados['nome']}!")
 
-    st.markdown(f"""
-    ### Obrigado, {st.session_state.dados['nome']}! 🙌
-
-    Seu número: **{st.session_state.numero}**
-
-    Boa sorte! 🍀
-    """)
-
-    if st.button("🔄 Fazer nova reserva", use_container_width=True):
+    # O SEGREDO ESTÁ AQUI: Não limpamos o st.session_state.dados
+    if st.button("🔄 Escolher outro número", use_container_width=True):
         st.session_state.step = 1
         st.session_state.numero = None
-        st.session_state.dados = {}
+        st.session_state.dados_travados = False 
         st.rerun()
-
