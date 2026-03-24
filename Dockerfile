@@ -21,4 +21,4 @@ COPY . .
 EXPOSE 8599
 
 # Comando para rodar a aplicação em produção utilizando o Gunicorn (servidor mais rápido e seguro)
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8599", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8599", "app:app"]

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, session
+from flask import Flask, render_template, request, redirect, session, url_for
 import sqlite3
 import os
 
@@ -55,7 +55,7 @@ def index():
     if request.method == "POST":
         session["nome"] = request.form["nome"]
         session["telefone"] = request.form["telefone"]
-        return redirect("/numeros")
+        return redirect(url_for("numeros"))
     
     return render_template("index.html")
 
@@ -78,7 +78,7 @@ def numeros():
             return "❌ Um dos números já foi escolhido! Volte e tente novamente."
 
         session["numeros"] = escolhidos
-        return redirect("/pagamento")
+        return redirect(url_for("pagamento"))
 
     return render_template("numeros.html", ocupados=ocupados)
 
@@ -88,7 +88,7 @@ def numeros():
 @app.route("/pagamento", methods=["GET", "POST"])
 def pagamento():
     if "numeros" not in session:
-        return redirect("/")
+        return redirect(url_for("index"))
 
     if request.method == "POST":
         numeros = session["numeros"]
@@ -109,7 +109,7 @@ def pagamento():
         conn.commit()
         conn.close()
 
-        return redirect("/obrigado")
+        return redirect(url_for("obrigado"))
 
     return render_template("pagamento.html", numeros=session["numeros"])
 
@@ -124,15 +124,21 @@ def obrigado():
 # -----------------------------
 # 🌐 Configuração de Base Path / Proxy Reverso (/rifa)
 # -----------------------------
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from werkzeug.exceptions import NotFound
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-# Isso embute a aplicação do Flask dentro do prefixo /rifa
-# Fazendo com que todas as rotas e url_for automaticamente respeitem esse fallback.
-app.wsgi_app = DispatcherMiddleware(
-    NotFound(),
-    {"/rifa": app.wsgi_app}
-)
+# Usa ProxyFix para interpretar os headers X-Forwarded-* do Nginx.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=0)
+
+# Middleware para forçar o SCRIPT_NAME, pois o Nginx remove '/rifa' 
+# (por causa da barra no final do proxy_pass, ex: proxy_pass http://127.0.0.1:8599/;)
+class ReverseProxied(object):
+    def __init__(self, app):
+        self.app = app
+    def __call__(self, environ, start_response):
+        environ['SCRIPT_NAME'] = '/rifa'
+        return self.app(environ, start_response)
+
+app.wsgi_app = ReverseProxied(app.wsgi_app)
 
 # -----------------------------
 if __name__ == "__main__":
