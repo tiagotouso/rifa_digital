@@ -15,4 +15,4 @@ COPY . .
 EXPOSE 8599
 
 # Comando para rodar o app
-CMD ["streamlit", "run", "app.py", "--server.port=8599", "---server.baseUrlPath=/rifa"]
+CMD ["streamlit", "run", "app.py", "--server.port=8599", "--server.baseUrlPath=/rifa"]
