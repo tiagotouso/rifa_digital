@@ -1,12 +1,15 @@
 version: '3.8'
 
 services:
-  rifa-app:
+  web:
     build: .
-    container_name: streamlit_rifa
+    container_name: rifa_flask_app
     ports:
       - "8599:8599"
     volumes:
-      # Mapeia a pasta local "data" para a pasta "data" dentro do container
+      # Aqui fazemos o mapeamento da pasta host 'data' para a pasta '/app/data' do contêiner.
+      # Isso garante que o banco de dados seja persistido no seu disco do sistema operacional.
       - ./data:/app/data
     restart: always
+    environment:
+      - FLASK_ENV=development

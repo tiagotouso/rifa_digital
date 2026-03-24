@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card form-container text-center">
+    <div class="icon-header">🎟️</div>
+    <h2>🍀 Rifa Digital da Cecília 🍀</h2>
+    <p class="subtitle">Faça seu cadastro para participar</p>
+
+    <form method="post" class="form-layout">
+        <div class="form-group text-left">
+            <label for="nome">Nome Completo</label>
+            <input type="text" id="nome" name="nome" placeholder="Ex: João da Silva" required>
+        </div>
+        <div class="form-group text-left">
+            <label for="telefone">Telefone (WhatsApp)</label>
+            <input type="text" id="telefone" name="telefone" placeholder="(00) 00000-0000" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block btn-lg mt-3">Próximo ➡️</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card text-center">
+    <div class="icon-header">💰</div>
+    <h2>Pagamento via PIX</h2>
+    <p class="subtitle">Você escolheu os seguintes números:</p>
+
+    <ul class="list-group mb-4">
+        {% for n in numeros %}
+        <li class="list-group-item d-flex justify-content-between">
+            <span>🎫 Bilhete da Rifa</span>
+            <strong>Nº {{n}}</strong>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <div class="pix-box">
+        <p class="mb-2">Copie e cole a chave PIX no seu banco:</p>
+        <div class="pix-key-container" style="cursor: pointer;" onclick="copyPix()"
+            title="Clique para copiar a chave PIX">
+            <h3 class="pix-key" id="pixKey">d3c59165-6dc8-4a07-b487-18d1a1f1cac5 <small>📋</small></h3>
+        </div>
+        <p class="text-muted mt-2">Sua reserva será confirmada após o pagamento.</p>
+    </div>
+
+    <form method="post" class="mt-4">
+        <button type="submit" class="btn btn-success btn-block btn-lg">Já paguei ✅</button>
+    </form>
+</div>
+
+<script>
+    function copyPix() {
+        var pixText = "d3c59165-6dc8-4a07-b487-18d1a1f1cac5";
+        navigator.clipboard.writeText(pixText).then(function () {
+            var el = document.getElementById("pixKey");
+            var originalText = el.innerHTML;
+            el.innerHTML = "Copiado! ✅";
+            setTimeout(function () {
+                el.innerHTML = originalText;
+            }, 2000);
+        });
+    }
+</script>
+{% endblock %}

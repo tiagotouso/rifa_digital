@@ -1,383 +1,139 @@
-import streamlit as st
-import pandas as pd
+from flask import Flask, render_template, request, redirect, session
+import sqlite3
 import os
 
-# --- CONFIG ---
-st.set_page_config(
-    page_title="🍀 Rifa Digital da Cecília 🍀",
-    page_icon="🎟️",
-    layout="centered"
-)
+app = Flask(__name__)
+app.secret_key = "rifa_secreta_123"
 
-# --- GARANTE PASTA ---
-if not os.path.exists("data"):
-    os.makedirs("data")
+os.makedirs("data", exist_ok=True)
+DB = os.path.join("data", "database.db")
 
-DB_FILE = "data/rifa_dados.csv"
+# -----------------------------
+# 📌 Criar banco automaticamente
+# -----------------------------
+def init_db():
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS rifa (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            telefone TEXT,
+            numero INTEGER UNIQUE
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-# --- FUNÇÕES ---
-def carregar_ocupados():
-    if os.path.exists(DB_FILE):
-        try:
-            df = pd.read_csv(DB_FILE)
-            return df['numero'].tolist()
-        except:
-            return []
-    return []
+init_db()
 
-def salvar_venda(nome, telefone, numero):
-    ocupados_agora = carregar_ocupados()
+# -----------------------------
+# 🔁 Recursividade para validar números
+# -----------------------------
+def validar_numeros(lista, index=0):
+    if index >= len(lista):
+        return True
+    
+    numero = lista[index]
+    
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("SELECT * FROM rifa WHERE numero = ?", (numero,))
+    existe = c.fetchone()
+    conn.close()
 
-    if numero in ocupados_agora:
+    if existe:
         return False
+    
+    return validar_numeros(lista, index + 1)
 
-    novo_dado = pd.DataFrame(
-        [[nome, telefone, numero]],
-        columns=['nome', 'telefone', 'numero']
-    )
+# -----------------------------
+# 🏠 Cadastro
+# -----------------------------
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "POST":
+        session["nome"] = request.form["nome"]
+        session["telefone"] = request.form["telefone"]
+        return redirect("/numeros")
+    
+    return render_template("index.html")
 
-    if not os.path.exists(DB_FILE):
-        novo_dado.to_csv(DB_FILE, index=False)
-    else:
-        novo_dado.to_csv(DB_FILE, mode='a', header=False, index=False)
+# -----------------------------
+# 🎯 Escolha dos números
+# -----------------------------
+@app.route("/numeros", methods=["GET", "POST"])
+def numeros():
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("SELECT numero FROM rifa")
+    ocupados = [row[0] for row in c.fetchall()]
+    conn.close()
 
-    return True
+    if request.method == "POST":
+        escolhidos = request.form.getlist("numeros")
+        escolhidos = list(map(int, escolhidos))
 
-# --- SESSION STATE ---
-if "step" not in st.session_state:
-    st.session_state.step = 1
+        if not validar_numeros(escolhidos):
+            return "❌ Um dos números já foi escolhido! Volte e tente novamente."
 
-if "numero" not in st.session_state:
-    st.session_state.numero = None
+        session["numeros"] = escolhidos
+        return redirect("/pagamento")
 
-if "dados" not in st.session_state:
-    st.session_state.dados = {"nome": "", "telefone": ""}
+    return render_template("numeros.html", ocupados=ocupados)
 
-if "dados_travados" not in st.session_state:
-    st.session_state.dados_travados = False
+# -----------------------------
+# 💰 Pagamento
+# -----------------------------
+@app.route("/pagamento", methods=["GET", "POST"])
+def pagamento():
+    if "numeros" not in session:
+        return redirect("/")
 
-if "conflito_numero" not in st.session_state:
-    st.session_state.conflito_numero = False
+    if request.method == "POST":
+        numeros = session["numeros"]
 
-# --- HEADER ---
-st.title("🍀 Rifa Digital da Cecília 🍀")
-st.caption("Escolha seu número e participe!")
+        # Verifica novamente antes de salvar
+        if not validar_numeros(numeros):
+            return "⚠️ Número já foi comprado por outra pessoa!"
 
-st.progress(st.session_state.step / 4)
+        conn = sqlite3.connect(DB)
+        c = conn.cursor()
 
-# =========================
-# STEP 1 - DADOS
-# =========================
-if st.session_state.step == 1:
-    st.subheader("👤 1. Seus dados")
-
-    with st.form("form_dados"):
-        nome = st.text_input(
-            "Nome completo",
-            value=st.session_state.dados.get("nome", ""),
-            disabled=st.session_state.dados_travados
-        )
-
-        telefone = st.text_input(
-            "WhatsApp",
-            value=st.session_state.dados.get("telefone", ""),
-            disabled=st.session_state.dados_travados
-        )
-
-        submitted = st.form_submit_button("Continuar ➡️", use_container_width=True)
-
-        if submitted:
-            if nome and telefone:
-                st.session_state.dados = {
-                    "nome": nome,
-                    "telefone": telefone
-                }
-                st.session_state.dados_travados = True
-                st.session_state.step = 2
-                st.rerun()
-            else:
-                st.warning("Preencha todos os campos.")
-
-# =========================
-# STEP 2 - ESCOLHER NÚMERO
-# =========================
-elif st.session_state.step == 2:
-    st.subheader("🎯 2. Escolha seu número")
-
-    nome = st.session_state.dados.get("nome")
-    telefone = st.session_state.dados.get("telefone")
-
-    st.info(f"👤 {nome} | 📱 {telefone}")
-
-    numeros_ocupados = carregar_ocupados()
-
-    # Melhor para mobile: 3 colunas
-    cols = st.columns(3)
-
-    for i in range(1, 26):
-        col_idx = (i - 1) % 3
-        with cols[col_idx]:
-            if i in numeros_ocupados:
-                st.button("❌", disabled=True, key=f"num_{i}", use_container_width=True)
-            else:
-                tipo = "primary" if st.session_state.numero == i else "secondary"
-
-                if st.button(
-                    f"{i}",
-                    key=f"num_{i}",
-                    type=tipo,
-                    use_container_width=True
-                ):
-                    st.session_state.numero = i
-
-    if st.session_state.numero:
-        st.success(f"Selecionado: **{st.session_state.numero}**")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            if st.button("⬅️ Voltar", use_container_width=True):
-                st.session_state.step = 1
-                st.rerun()
-
-        with col2:
-            if st.button("Continuar ➡️", use_container_width=True):
-                st.session_state.step = 3
-                st.rerun()
-
-# =========================
-# STEP 3 - PAGAMENTO
-# =========================
-elif st.session_state.step == 3:
-    st.subheader("💸 3. Pagamento")
-
-    st.info(f"🎟️ Número: {st.session_state.numero}")
-
-    st.write("PIX copie e cola 👇")
-    st.code("d3c59165-6dc8-4a07-b487-18d1a1f1cac5")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("⬅️ Voltar", use_container_width=True):
-            st.session_state.step = 2
-            st.rerun()
-
-    with col2:
-        if st.button("✅ Já paguei", use_container_width=True):
-            sucesso = salvar_venda(
-                st.session_state.dados["nome"],
-                st.session_state.dados["telefone"],
-                st.session_state.numero
+        for n in numeros:
+            c.execute(
+                "INSERT INTO rifa (nome, telefone, numero) VALUES (?, ?, ?)",
+                (session["nome"], session["telefone"], n)
             )
 
-            if sucesso:
-                st.session_state.step = 4
-                st.rerun()
-            else:
-                st.session_state.conflito_numero = True
+        conn.commit()
+        conn.close()
 
-    if st.session_state.conflito_numero:
-        st.error("⚠️ Este número acabou de ser reservado!")
+        return redirect("/obrigado")
 
-        if st.button("Escolher outro número", use_container_width=True):
-            st.session_state.numero = None
-            st.session_state.step = 2
-            st.session_state.conflito_numero = False
-            st.rerun()
+    return render_template("pagamento.html", numeros=session["numeros"])
 
-# =========================
-# STEP 4 - SUCESSO
-# =========================
-elif st.session_state.step == 4:
-    st.balloons()
+# -----------------------------
+# 🎉 Agradecimento
+# -----------------------------
+@app.route("/obrigado")
+def obrigado():
+    session.clear()
+    return render_template("obrigado.html")
 
-    st.success(
-        f"🎉 Reserva confirmada para {st.session_state.dados['nome']}!"
-    )
+# -----------------------------
+# 🌐 Configuração de Base Path / Proxy Reverso (/rifa)
+# -----------------------------
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.exceptions import NotFound
 
-    if st.button("🔄 Escolher outro número", use_container_width=True):
-        st.session_state.step = 1
-        st.session_state.numero = None
-        st.session_state.dados_travados = False
-        st.rerun()
-        
-        
-# import streamlit as st
-# import pandas as pd
-# import os
+# Isso embute a aplicação do Flask dentro do prefixo /rifa
+# Fazendo com que todas as rotas e url_for automaticamente respeitem esse fallback.
+app.wsgi_app = DispatcherMiddleware(
+    NotFound(),
+    {"/rifa": app.wsgi_app}
+)
 
-# # --- CONFIG ---
-# st.set_page_config(page_title="🍀 Rifa Digital da Cecília 🍀", page_icon="🎟️", layout="centered")
-
-# # Cria a pasta data se não existir
-# if not os.path.exists("data"):
-#     os.makedirs("data")
-
-# DB_FILE = "data/rifa_dados.csv"
-
-# # --- FUNÇÕES ---
-# def carregar_ocupados():
-#     if os.path.exists(DB_FILE):
-#         try:
-#             df = pd.read_csv(DB_FILE)
-#             return df['numero'].tolist()
-#         except:
-#             return []
-#     return []
-
-# def salvar_venda(nome, telefone, numero):
-#     # --- ALTERAÇÃO CRUCIAL: Verificação de segurança ---
-#     # Recarregamos os dados do arquivo no momento exato do clique para checar duplicidade
-#     ocupados_agora = carregar_ocupados()
-    
-#     if numero in ocupados_agora:
-#         return False  # Bloqueia a venda se o número já foi levado
-    
-#     # Se estiver livre, prossegue com o salvamento
-#     novo_dado = pd.DataFrame([[nome, telefone, numero]],
-#                              columns=['nome', 'telefone', 'numero'])
-    
-#     if not os.path.exists(DB_FILE):
-#         novo_dado.to_csv(DB_FILE, index=False)
-#     else:
-#         novo_dado.to_csv(DB_FILE, mode='a', header=False, index=False)
-#     return True
-
-# # --- ESTADO INICIAL ---
-# if "step" not in st.session_state:  
-#     st.session_state.step = 1
-
-# if "numero" not in st.session_state:
-#     st.session_state.numero = None
-
-# if "dados" not in st.session_state:
-#     st.session_state.dados = {"nome": "", "telefone": ""}
-
-# if "dados_travados" not in st.session_state:
-#     st.session_state.dados_travados = False
-
-# # --- HEADER ---
-# st.title("🍀 Rifa Digital da Cecília 🍀")
-# st.caption("Escolha seu número e participe!")
-
-# progresso = st.session_state.step / 4
-# st.progress(progresso)
-
-# # =========================
-# # STEP 1 - DADOS
-# # =========================
-# if st.session_state.step == 1:
-#     st.subheader("👤 1. Seus dados")
-
-#     nome = st.text_input(
-#         "Nome completo",
-#         value=st.session_state.dados.get("nome", ""),
-#         disabled=st.session_state.dados_travados
-#     )
-
-#     telefone = st.text_input(
-#         "WhatsApp",
-#         value=st.session_state.dados.get("telefone", ""),
-#         disabled=st.session_state.dados_travados
-#     )
-
-#     if st.button("Continuar ➡️", use_container_width=True):
-#         if nome and telefone:
-#             st.session_state.dados = {"nome": nome, "telefone": telefone}
-#             st.session_state.dados_travados = True
-#             st.session_state.step = 2
-#             st.rerun()
-#         else:
-#             st.warning("Preencha todos os campos.")
-
-# # =========================
-# # STEP 2 - ESCOLHER NÚMERO
-# # =========================
-# elif st.session_state.step == 2:
-#     st.subheader("🎯 2. Escolha seu número")
-    
-#     nome = st.session_state.dados.get("nome")
-#     telefone = st.session_state.dados.get("telefone")
-#     st.info(f"👤 {nome} | 📱 {telefone}")
-
-#     numeros_ocupados = carregar_ocupados()
-#     cols = st.columns(5)
-
-#     for i in range(1, 26):
-#         col_idx = (i - 1) % 5
-#         with cols[col_idx]:
-#             if i in numeros_ocupados:
-#                 st.button("❌", disabled=True, key=f"num_{i}", use_container_width=True)
-#             else:
-#                 tipo = "primary" if st.session_state.numero == i else "secondary"
-#                 if st.button(f"{i}", key=f"num_{i}", type=tipo, use_container_width=True):
-#                     st.session_state.numero = i
-
-#     if st.session_state.numero:
-#         st.success(f"Selecionado: **{st.session_state.numero}**")
-#         col1, col2 = st.columns(2)
-#         with col1:
-#             if st.button("⬅️ Voltar", use_container_width=True):
-#                 st.session_state.step = 1
-#                 st.rerun()
-#         with col2:
-#             if st.button("Continuar ➡️", use_container_width=True):
-#                 st.session_state.step = 3
-#                 st.rerun()
-
-# # =========================
-# # STEP 3 - PAGAMENTO
-# # =========================
-# elif st.session_state.step == 3:
-#     st.subheader("💸 3. Pagamento")
-#     st.info(f"🎟️ Número: {st.session_state.numero}")
-#     st.write('PIX copie e cola 👇')
-#     st.code("d3c59165-6dc8-4a07-b487-18d1a1f1cac5")
-
-#     # Criamos uma variável para controlar o erro fora das colunas
-#     erro_duplicado = False
-
-#     col1, col2 = st.columns(2)
-#     with col1:
-#         if st.button("⬅️ Voltar", use_container_width=True):
-#             st.session_state.step = 2
-#             st.rerun()
-#     with col2:
-#         if st.button("✅ Já paguei", use_container_width=True):
-#             sucesso = salvar_venda(
-#                 st.session_state.dados["nome"],
-#                 st.session_state.dados["telefone"],
-#                 st.session_state.numero
-#             )
-            
-#             if sucesso:
-#                 st.session_state.step = 4
-#                 st.rerun()
-#             else:
-#                 # Se falhar, avisamos o estado do erro para exibir fora da coluna
-#                 st.session_state.conflito_numero = True
-
-#     # EXIBIÇÃO FORA DAS COLUNAS (LINHA INTEIRA)
-#     if st.session_state.get("conflito_numero", False):
-#         st.error("⚠️ Sinto muito! Este número acabou de ser reservado por outra pessoa.")
-#         if st.button("Escolher outro número", use_container_width=True):
-#             st.session_state.numero = None
-#             st.session_state.step = 2
-#             st.session_state.conflito_numero = False # Limpa o erro
-#             st.rerun()
-
-# # =========================
-# # STEP 4 - SUCESSO
-# # =========================
-# elif st.session_state.step == 4:
-#     st.balloons()
-#     st.success(f"🎉 Reserva confirmada para {st.session_state.dados['nome']}!")
-
-#     if st.button("🔄 Escolher outro número", use_container_width=True):
-#         st.session_state.step = 1
-#         st.session_state.numero = None
-#         st.session_state.dados_travados = False 
-#         st.rerun()
-
-
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
