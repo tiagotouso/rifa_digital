@@ -127,6 +127,7 @@ elif st.session_state.step == 2:
 elif st.session_state.step == 3:
     st.subheader("💸 3. Pagamento")
     st.info(f"🎟️ Número: {st.session_state.numero}")
+    st.write('PIX copie e cola 👇')
     st.code("d3c59165-6dc8-4a07-b487-18d1a1f1cac5")
 
     # Criamos uma variável para controlar o erro fora das colunas
