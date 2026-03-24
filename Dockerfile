@@ -14,5 +14,5 @@ COPY . .
 # Expõe a porta padrão do Streamlit
 EXPOSE 8599
 
-# Comando para rodar o app
-CMD ["streamlit", "run", "app.py", "--server.port=8599", "--server.baseUrlPath=/rifa"]
+# Comando para rodar o app com o Host e o BasePath corretos
+CMD ["streamlit", "run", "app.py", "--server.port=8599", "--server.address=0.0.0.0", "--server.baseUrlPath=/rifa"]
