@@ -5,7 +5,7 @@ services:
     build: .
     container_name: rifa_flask_app
     ports:
-      - "8599:8599"
+      - "127.0.0.1:8599:8599"
     volumes:
       # Aqui fazemos o mapeamento da pasta host 'data' para a pasta '/app/data' do contêiner.
       # Isso garante que o banco de dados seja persistido no seu disco do sistema operacional.
