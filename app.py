@@ -12,18 +12,19 @@ DB = os.path.join("data", "database.db")
 # 📌 Criar banco automaticamente
 # -----------------------------
 def init_db():
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS rifa (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT,
-            telefone TEXT,
-            numero INTEGER UNIQUE
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    if not os.path.exists(DB):
+        conn = sqlite3.connect(DB)
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS rifa (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT,
+                telefone TEXT,
+                numero INTEGER UNIQUE
+            )
+        ''')
+        conn.commit()
+        conn.close()
 
 init_db()
 
@@ -48,16 +49,32 @@ def validar_numeros(lista, index=0):
     return validar_numeros(lista, index + 1)
 
 # -----------------------------
-# 🏠 Cadastro
+# 🏠 Início (Página de Vendas)
 # -----------------------------
-@app.route("/", methods=["GET", "POST"])
+@app.route("/")
 def index():
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(DISTINCT numero) FROM rifa")
+    vendidos = c.fetchone()[0]
+    conn.close()
+    
+    total_numeros = 25
+    disponiveis = max(0, total_numeros - vendidos)
+    
+    return render_template("index.html", disponiveis=disponiveis)
+
+# -----------------------------
+# 📝 Cadastro
+# -----------------------------
+@app.route("/cadastro", methods=["GET", "POST"])
+def cadastro():
     if request.method == "POST":
         session["nome"] = request.form["nome"]
         session["telefone"] = request.form["telefone"]
         return redirect(url_for("numeros"))
     
-    return render_template("index.html")
+    return render_template("cadastro.html")
 
 # -----------------------------
 # 🎯 Escolha dos números
@@ -88,7 +105,7 @@ def numeros():
 @app.route("/pagamento", methods=["GET", "POST"])
 def pagamento():
     if "numeros" not in session:
-        return redirect(url_for("index"))
+        return redirect(url_for("cadastro"))
 
     if request.method == "POST":
         numeros = session["numeros"]
@@ -129,13 +146,28 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 # Usa ProxyFix para interpretar os headers X-Forwarded-* do Nginx.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=0)
 
-# Middleware para forçar o SCRIPT_NAME, pois o Nginx remove '/rifa' 
-# (por causa da barra no final do proxy_pass, ex: proxy_pass http://127.0.0.1:8599/;)
+# Middleware para resolver SCRIPT_NAME e PATH_INFO
+# Permite rodar a base /rifa localmente e através do Nginx proxy_pass
 class ReverseProxied(object):
     def __init__(self, app):
         self.app = app
     def __call__(self, environ, start_response):
+        path_info = environ.get('PATH_INFO', '')
+
+        # Se acessarem a raiz absoluta localmente (http://localhost:8599/)
+        # redireciona automaticamente para /rifa/
+        if path_info == '/' and not environ.get('HTTP_X_FORWARDED_FOR'):
+            start_response('302 Found', [('Location', '/rifa/')])
+            return [b'']
+
+        # Fixa o prefixo de todos os links para /rifa
         environ['SCRIPT_NAME'] = '/rifa'
+
+        # Se o acesso (local) já veio com o prefixo /rifa, nós cortamos para
+        # que o roteador interno do Flask (que só conhece '/', '/cadastro') encontre a rota.
+        if path_info.startswith('/rifa'):
+            environ['PATH_INFO'] = path_info[5:] or '/'
+
         return self.app(environ, start_response)
 
 app.wsgi_app = ReverseProxied(app.wsgi_app)
