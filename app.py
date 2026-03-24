@@ -5,7 +5,7 @@ import os
 # --- CONFIG ---
 st.set_page_config(page_title="🍀 Rifa Digital da Cecília 🍀", page_icon="🎟️", layout="centered")
 
-# Cria a pasta data se não existir para evitar erros de escrita
+# Cria a pasta data se não existir
 if not os.path.exists("data"):
     os.makedirs("data")
 
@@ -14,20 +14,33 @@ DB_FILE = "data/rifa_dados.csv"
 # --- FUNÇÕES ---
 def carregar_ocupados():
     if os.path.exists(DB_FILE):
-        df = pd.read_csv(DB_FILE)
-        return df['numero'].tolist()
+        try:
+            df = pd.read_csv(DB_FILE)
+            return df['numero'].tolist()
+        except:
+            return []
     return []
 
 def salvar_venda(nome, telefone, numero):
+    # --- ALTERAÇÃO CRUCIAL: Verificação de segurança ---
+    # Recarregamos os dados do arquivo no momento exato do clique para checar duplicidade
+    ocupados_agora = carregar_ocupados()
+    
+    if numero in ocupados_agora:
+        return False  # Bloqueia a venda se o número já foi levado
+    
+    # Se estiver livre, prossegue com o salvamento
     novo_dado = pd.DataFrame([[nome, telefone, numero]],
                              columns=['nome', 'telefone', 'numero'])
+    
     if not os.path.exists(DB_FILE):
         novo_dado.to_csv(DB_FILE, index=False)
     else:
         novo_dado.to_csv(DB_FILE, mode='a', header=False, index=False)
+    return True
 
 # --- ESTADO INICIAL ---
-if "step" not in st.session_state:
+if "step" not in st.session_state:  
     st.session_state.step = 1
 
 if "numero" not in st.session_state:
@@ -52,7 +65,6 @@ st.progress(progresso)
 if st.session_state.step == 1:
     st.subheader("👤 1. Seus dados")
 
-    # Os campos abaixo agora mantêm o valor da última compra com sucesso
     nome = st.text_input(
         "Nome completo",
         value=st.session_state.dados.get("nome", ""),
@@ -117,6 +129,9 @@ elif st.session_state.step == 3:
     st.info(f"🎟️ Número: {st.session_state.numero}")
     st.code("d3c59165-6dc8-4a07-b487-18d1a1f1cac5")
 
+    # Criamos uma variável para controlar o erro fora das colunas
+    erro_duplicado = False
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("⬅️ Voltar", use_container_width=True):
@@ -124,12 +139,26 @@ elif st.session_state.step == 3:
             st.rerun()
     with col2:
         if st.button("✅ Já paguei", use_container_width=True):
-            salvar_venda(
+            sucesso = salvar_venda(
                 st.session_state.dados["nome"],
                 st.session_state.dados["telefone"],
                 st.session_state.numero
             )
-            st.session_state.step = 4
+            
+            if sucesso:
+                st.session_state.step = 4
+                st.rerun()
+            else:
+                # Se falhar, avisamos o estado do erro para exibir fora da coluna
+                st.session_state.conflito_numero = True
+
+    # EXIBIÇÃO FORA DAS COLUNAS (LINHA INTEIRA)
+    if st.session_state.get("conflito_numero", False):
+        st.error("⚠️ Sinto muito! Este número acabou de ser reservado por outra pessoa.")
+        if st.button("Escolher outro número", use_container_width=True):
+            st.session_state.numero = None
+            st.session_state.step = 2
+            st.session_state.conflito_numero = False # Limpa o erro
             st.rerun()
 
 # =========================
@@ -139,9 +168,10 @@ elif st.session_state.step == 4:
     st.balloons()
     st.success(f"🎉 Reserva confirmada para {st.session_state.dados['nome']}!")
 
-    # O SEGREDO ESTÁ AQUI: Não limpamos o st.session_state.dados
     if st.button("🔄 Escolher outro número", use_container_width=True):
         st.session_state.step = 1
         st.session_state.numero = None
         st.session_state.dados_travados = False 
         st.rerun()
+
+
