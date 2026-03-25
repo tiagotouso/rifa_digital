@@ -139,6 +139,45 @@ def obrigado():
     return render_template("obrigado.html")
 
 # -----------------------------
+# 🔐 Admin Auth
+# -----------------------------
+@app.route("/admin", methods=["GET", "POST"])
+def admin_login():
+    erro = None
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        if username == "TOUSO" and password == "#Cat2017":
+            session["admin_logged_in"] = True
+            return redirect(url_for("admin_relatorio"))
+        else:
+            erro = "Credenciais inválidas."
+
+    return render_template("admin_login.html", erro=erro)
+
+@app.route("/admin/relatorio")
+def admin_relatorio():
+    if not session.get("admin_logged_in"):
+        return redirect(url_for("admin_login"))
+
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("SELECT id, nome, telefone, numero FROM rifa ORDER BY numero ASC")
+    rifas = c.fetchall()
+    
+    vendidos = len(rifas)
+    total_numeros = 25
+    disponiveis = max(0, total_numeros - vendidos)
+    conn.close()
+
+    return render_template("admin_relatorio.html", rifas=rifas, vendidos=vendidos, disponiveis=disponiveis, total=total_numeros)
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop("admin_logged_in", None)
+    return redirect(url_for("admin_login"))
+
+# -----------------------------
 # 🌐 Configuração de Base Path / Proxy Reverso (/rifa)
 # -----------------------------
 from werkzeug.middleware.proxy_fix import ProxyFix

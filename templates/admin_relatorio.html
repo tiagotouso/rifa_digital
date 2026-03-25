@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    /* Expande o container principal para a tabela caber melhor */
+    .container {
+        max-width: 800px !important;
+    }
+    .text-primary { color: var(--primary); }
+</style>
+
+<div class="card">
+    <div class="text-center">
+        <span class="icon-header">📊</span>
+        <h2>Relatório da Rifa</h2>
+        <p class="subtitle">Visão Geral das Vendas</p>
+    </div>
+
+    <div class="stats-container mb-4 d-flex justify-content-between">
+        <div class="stat-box text-center" style="background: #F3F4F6; padding: 1.5rem 1rem; border-radius: var(--radius-md); flex: 1; margin: 0 0.5rem;">
+            <p class="text-muted mb-2">Vendidos</p>
+            <h3 class="text-primary" style="font-size: 2rem;">{{ vendidos }}</h3>
+        </div>
+        <div class="stat-box text-center" style="background: #F3F4F6; padding: 1.5rem 1rem; border-radius: var(--radius-md); flex: 1; margin: 0 0.5rem;">
+            <p class="text-muted mb-2">Disponíveis</p>
+            <h3 class="text-success" style="font-size: 2rem;">{{ disponiveis }}</h3>
+        </div>
+        <div class="stat-box text-center" style="background: #F3F4F6; padding: 1.5rem 1rem; border-radius: var(--radius-md); flex: 1; margin: 0 0.5rem;">
+            <p class="text-muted mb-2">Total</p>
+            <h3 class="text-main" style="font-size: 2rem;">{{ total }}</h3>
+        </div>
+    </div>
+
+    <div class="table-responsive" style="overflow-x: auto;">
+        <table class="table" style="width: 100%; border-collapse: collapse; margin-top: 1rem; text-align: left;">
+            <thead>
+                <tr style="background-color: var(--bg-page); border-bottom: 2px solid var(--border);">
+                    <th style="padding: 1rem; color: var(--text-muted); font-weight: 600;">Número</th>
+                    <th style="padding: 1rem; color: var(--text-muted); font-weight: 600;">Comprador</th>
+                    <th style="padding: 1rem; color: var(--text-muted); font-weight: 600;">Telefone</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in rifas %}
+                <tr style="border-bottom: 1px solid var(--border);">
+                    <td style="padding: 1rem; font-weight: 600; color: var(--primary);">{{ "%02d"|format(item[3]) }}</td>
+                    <td style="padding: 1rem;">{{ item[1] }}</td>
+                    <td style="padding: 1rem;">{{ item[2] }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" class="text-center text-muted" style="padding: 2rem;">Nenhuma rifa vendida ainda.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="text-center mt-4 d-flex" style="gap: 1rem; justify-content: center;">
+        <a href="{{ url_for('admin_logout') }}" class="btn btn-outline" style="text-decoration: none; flex: 1; max-width: 200px;">Sair</a>
+        <a href="{{ url_for('index') }}" class="btn btn-primary" style="text-decoration: none; flex: 1; max-width: 200px;">Ver Rifa</a>
+    </div>
+</div>
+{% endblock %}
